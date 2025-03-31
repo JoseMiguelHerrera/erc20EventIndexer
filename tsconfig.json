@@ -1,0 +1,12 @@
+{
+    "compilerOptions": {
+      "target": "es2022",//Most common target for node
+      "module": "commonjs",
+      "outDir": "./dist",
+      "rootDir": "./",
+      "strict": true,
+      "esModuleInterop": true,
+      "skipLibCheck": true,
+      "resolveJsonModule": true
+    }
+  }

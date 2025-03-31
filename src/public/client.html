@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Socket.IO Event Monitor</title>
+    <script src="https://cdn.socket.io/4.6.0/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        .header {
+            background-color: #2c3e50;
+            color: white;
+            padding: 15px;
+            border-radius: 5px 5px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .connection-status {
+            display: flex;
+            align-items: center;
+            margin-right: 10px;
+        }
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 10px;
+        }
+        .connected {
+            background-color: #2ecc71;
+        }
+        .disconnected {
+            background-color: #e74c3c;
+        }
+        .connecting {
+            background-color: #f39c12;
+            animation: blink 1s infinite;
+        }
+        @keyframes blink {
+            0% { opacity: 0.4; }
+            50% { opacity: 1; }
+            100% { opacity: 0.4; }
+        }
+        .controls {
+            background-color: #ecf0f1;
+            padding: 15px;
+            border-bottom: 1px solid #ddd;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+        }
+        input[type="text"] {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            flex-grow: 1;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        button.disconnect {
+            background-color: #e74c3c;
+        }
+        button.disconnect:hover {
+            background-color: #c0392b;
+        }
+        button.connect {
+            background-color: #2ecc71;
+        }
+        button.connect:hover {
+            background-color: #27ae60;
+        }
+        button:disabled {
+            background-color: #95a5a6;
+            cursor: not-allowed;
+        }
+        .events-container {
+            background-color: white;
+            border: 1px solid #ddd;
+            border-top: none;
+            border-radius: 0 0 5px 5px;
+            overflow: hidden;
+        }
+        .events-header {
+            display: flex;
+            background-color: #34495e;
+            color: white;
+            padding: 10px 15px;
+        }
+        .events-header div {
+            flex: 1;
+            font-weight: bold;
+        }
+        .events-header div:first-child {
+            flex: 0 0 150px;
+        }
+        .events-header div:nth-child(2) {
+            flex: 0 0 100px;
+        }
+        .events-body {
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        .event-row {
+            display: flex;
+            padding: 10px 15px;
+            border-bottom: 1px solid #ecf0f1;
+        }
+        .event-row:hover {
+            background-color: #f9f9f9;
+        }
+        .event-row div {
+            flex: 1;
+            word-break: break-word;
+        }
+        .event-row div:first-child {
+            flex: 0 0 150px;
+            color: #7f8c8d;
+        }
+        .event-row div:nth-child(2) {
+            flex: 0 0 100px;
+            font-weight: bold;
+        }
+        .event-row.system {
+            background-color: #f8f9fa;
+        }
+        .event-row.system div:nth-child(2) {
+            color: #3498db;
+        }
+        .event-row.error {
+            background-color: #fee;
+        }
+        .event-row.error div:nth-child(2) {
+            color: #e74c3c;
+        }
+        .json-data {
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .clear-btn {
+            background-color: #95a5a6;
+            margin-left: auto;
+        }
+        .clear-btn:hover {
+            background-color: #7f8c8d;
+        }
+        .event-filter {
+            padding: 10px 15px;
+            background-color: #f8f9fa;
+            border-bottom: 1px solid #ddd;
+        }
+        .config-panel {
+            margin-bottom: 15px;
+            padding: 15px;
+            background-color: #fff;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .config-panel h3 {
+            margin-top: 0;
+            margin-bottom: 15px;
+        }
+        .config-row {
+            display: flex;
+            margin-bottom: 10px;
+            align-items: center;
+        }
+        .config-row label {
+            width: 120px;
+        }
+        .config-row input {
+            flex-grow: 1;
+        }
+        .save-config {
+            margin-top: 10px;
+        }
+        .event-emitter {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .event-emitter input {
+            flex-grow: 1;
+        }
+        .event-emitter input:first-child {
+            flex: 0 0 150px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- No duplicate content here -->
+            <div class="config-row">
+                <label for="server-url">Server URL:</label>
+                <input type="text" id="server-url" value="http://localhost:3000">
+            </div>
+            <div class="config-row">
+                <label for="transport">Transport:</label>
+                <select id="transport">
+                    <option value="['websocket', 'polling']">WebSocket, then Polling</option>
+                    <option value="['websocket']">WebSocket only</option>
+                    <option value="['polling']">Polling only</option>
+                </select>
+            </div>
+            <div class="config-row">
+                <label for="reconnection">Reconnection:</label>
+                <input type="checkbox" id="reconnection" checked>
+                <label for="reconnection-attempts" style="width: auto; margin-left: 20px;">Attempts:</label>
+                <input type="number" id="reconnection-attempts" value="5" style="width: 60px">
+                <label for="reconnection-delay" style="width: auto; margin-left: 20px;">Delay (ms):</label>
+                <input type="number" id="reconnection-delay" value="1000" style="width: 80px">
+            </div>
+            <button id="save-config" class="save-config">Apply Configuration</button>
+        </div>
+
+        <div class="header">
+            <h2>Socket.IO Event Monitor</h2>
+            <div class="connection-status">
+                <div id="status-indicator" class="status-indicator disconnected"></div>
+                <span id="status-text">Disconnected</span>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button id="connect-btn" class="connect">Connect</button>
+            <button id="disconnect-btn" class="disconnect" disabled>Disconnect</button>
+            <button id="clear-events-btn" class="clear-btn">Clear Events</button>
+        </div>
+        
+        <div style="background-color: #f0f8ff; padding: 10px; margin: 10px 0; border-left: 4px solid #1e90ff; font-size: 0.9em;">
+            <strong>About Socket.IO Broadcasts:</strong>
+            <ul style="margin: 5px 0 5px 20px;">
+                <li>Broadcasts are regular Socket.IO events sent to multiple clients</li>
+                <li>They appear with their actual event name (not as "broadcast")</li>
+                <li>To receive room-specific broadcasts, you must join that room</li>
+                <li>Global broadcasts (to all clients) will be received automatically</li>
+            </ul>
+        </div>
+
+        <div class="event-filter">
+            <label for="event-filter">Filter events:</label>
+            <input type="text" id="event-filter" placeholder="Type to filter events...">
+        </div>
+
+        <div class="controls">
+            <h4 style="margin: 0; margin-right: 10px;">Event Emitter:</h4>
+            <div class="event-emitter">
+                <input type="text" id="event-name" placeholder="Event name">
+                <input type="text" id="event-data" placeholder="Event data (JSON)">
+                <button id="emit-event-btn">Emit Event</button>
+            </div>
+        </div>
+
+        <div class="events-container">
+            <div class="events-header">
+                <div>Time</div>
+                <div>Event</div>
+                <div>Data</div>
+            </div>
+            <div id="events-body" class="events-body">
+                <!-- Events will be added here dynamically -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let socket = null;
+        let config = {
+            url: 'http://localhost:3000',
+            transports: ['websocket', 'polling'],
+            reconnection: true,
+            reconnectionAttempts: 5,
+            reconnectionDelay: 1000,
+            timeout: 20000
+        };
+
+        // DOM Elements
+        const statusIndicator = document.getElementById('status-indicator');
+        const statusText = document.getElementById('status-text');
+        const connectBtn = document.getElementById('connect-btn');
+        const disconnectBtn = document.getElementById('disconnect-btn');
+        const clearEventsBtn = document.getElementById('clear-events-btn');
+        const eventsBody = document.getElementById('events-body');
+        const eventFilter = document.getElementById('event-filter');
+        const serverUrlInput = document.getElementById('server-url');
+        const transportSelect = document.getElementById('transport');
+        const reconnectionCheckbox = document.getElementById('reconnection');
+        const reconnectionAttemptsInput = document.getElementById('reconnection-attempts');
+        const reconnectionDelayInput = document.getElementById('reconnection-delay');
+        const saveConfigBtn = document.getElementById('save-config');
+        const eventNameInput = document.getElementById('event-name');
+        const eventDataInput = document.getElementById('event-data');
+        const emitEventBtn = document.getElementById('emit-event-btn');
+        const joinRoomInput = document.getElementById('join-room');
+        const joinRoomBtn = document.getElementById('join-room-btn');
+
+        // Initialize with saved config if available
+        loadConfigFromLocalStorage();
+
+        // Function to update UI connection status
+        function updateConnectionStatus(status) {
+            statusIndicator.className = 'status-indicator ' + status;
+            statusText.textContent = status.charAt(0).toUpperCase() + status.slice(1);
+            
+            if (status === 'connected') {
+                connectBtn.disabled = true;
+                disconnectBtn.disabled = false;
+            } else if (status === 'disconnected') {
+                connectBtn.disabled = false;
+                disconnectBtn.disabled = true;
+            } else { // connecting
+                connectBtn.disabled = true;
+                disconnectBtn.disabled = true;
+            }
+        }
+
+        // Function to add event to the list
+        function addEventToList(eventName, data, type = 'normal') {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString() + '.' + now.getMilliseconds().toString().padStart(3, '0');
+            
+            const eventRow = document.createElement('div');
+            eventRow.className = 'event-row ' + type;
+            
+            const timeDiv = document.createElement('div');
+            timeDiv.textContent = timeString;
+            
+            const eventDiv = document.createElement('div');
+            eventDiv.textContent = eventName;
+            
+            const dataDiv = document.createElement('div');
+            dataDiv.className = 'json-data';
+            
+            if (data !== undefined) {
+                if (typeof data === 'object') {
+                    dataDiv.textContent = JSON.stringify(data, null, 2);
+                } else {
+                    dataDiv.textContent = data.toString();
+                }
+            } else {
+                dataDiv.textContent = '(no data)';
+            }
+            
+            eventRow.appendChild(timeDiv);
+            eventRow.appendChild(eventDiv);
+            eventRow.appendChild(dataDiv);
+            
+            eventsBody.prepend(eventRow);
+
+            // Apply filtering
+            const filterText = eventFilter.value.toLowerCase();
+            if (filterText && !eventName.toLowerCase().includes(filterText)) {
+                eventRow.style.display = 'none';
+            }
+        }
+
+        // Connect to Socket.IO server
+        function connectToServer() {
+            if (socket && socket.connected) {
+                addEventToList('system', 'Already connected', 'system');
+                return;
+            }
+
+            updateConnectionStatus('connecting');
+            addEventToList('system', `Connecting to ${config.url}...`, 'system');
+
+            // Create new socket connection with current config
+            socket = io(config.url, {
+                transports: config.transports,
+                reconnection: config.reconnection,
+                reconnectionAttempts: config.reconnectionAttempts,
+                reconnectionDelay: config.reconnectionDelay,
+                timeout: config.timeout
+            });
+
+            // Setup event listeners
+            socket.on('connect', () => {
+                updateConnectionStatus('connected');
+                addEventToList('connect', `Socket ID: ${socket.id}`, 'system');
+                
+                // You can emit a ready event when connected
+                socket.emit('clientReady', { message: 'Client is ready to receive events' });
+            });
+
+            socket.on('disconnect', (reason) => {
+                updateConnectionStatus('disconnected');
+                addEventToList('disconnect', `Reason: ${reason}`, 'system');
+            });
+
+            socket.on('connect_error', (error) => {
+                addEventToList('connect_error', error, 'error');
+            });
+
+            socket.on('error', (error) => {
+                addEventToList('error', error, 'error');
+            });
+
+            socket.on('reconnect', (attemptNumber) => {
+                addEventToList('reconnect', `Reconnected after ${attemptNumber} attempts`, 'system');
+            });
+
+            socket.on('reconnect_attempt', (attemptNumber) => {
+                addEventToList('reconnect_attempt', `Attempt ${attemptNumber}`, 'system');
+            });
+
+            socket.on('reconnect_error', (error) => {
+                addEventToList('reconnect_error', error, 'error');
+            });
+
+            socket.on('reconnect_failed', () => {
+                addEventToList('reconnect_failed', 'Max reconnection attempts reached', 'error');
+            });
+
+            // Dynamically track all events using the onAny handler
+            socket.onAny((eventName, ...args) => {
+                // Skip logging for standard events we already handle specifically
+                if (!['connect', 'disconnect', 'connect_error', 'reconnect', 
+                      'reconnect_attempt', 'reconnect_error', 'reconnect_failed'].includes(eventName)) {
+                    addEventToList(eventName, args.length === 1 ? args[0] : args);
+                }
+            });
+            
+            // The monitor is already listening for all events via onAny above
+            // We'll also join rooms to receive room-specific broadcasts
+            
+            // Common rooms that servers might use for broadcasts
+            const commonRooms = ['global', 'all', 'notifications'];
+            commonRooms.forEach(room => {
+                socket.emit('join', room);
+                addEventToList('system', `Attempting to join common room: ${room}`, 'system');
+            });
+            
+            // Add a special note about broadcasts
+            addEventToList('system', 'Listening for all events including broadcasts. Broadcasted events appear with their actual event name, not as "broadcast".', 'system');
+            }
+        
+
+        // Disconnect from server
+        function disconnectFromServer() {
+            if (socket) {
+                socket.disconnect();
+                addEventToList('system', 'Manually disconnected', 'system');
+            }
+        }
+
+        // Clear all events from the list
+        function clearEvents() {
+            eventsBody.innerHTML = '';
+            addEventToList('system', 'Events cleared', 'system');
+        }
+
+        // Filter events
+        function filterEvents() {
+            const filterText = eventFilter.value.toLowerCase();
+            const events = eventsBody.querySelectorAll('.event-row');
+            
+            events.forEach(event => {
+                const eventName = event.querySelector('div:nth-child(2)').textContent.toLowerCase();
+                event.style.display = eventName.includes(filterText) ? 'flex' : 'none';
+            });
+        }
+
+        // Save configuration
+        function saveConfiguration() {
+            config.url = serverUrlInput.value;
+            try {
+                config.transports = JSON.parse(transportSelect.value);
+            } catch (e) {
+                config.transports = ['websocket', 'polling'];
+            }
+            config.reconnection = reconnectionCheckbox.checked;
+            config.reconnectionAttempts = parseInt(reconnectionAttemptsInput.value) || 5;
+            config.reconnectionDelay = parseInt(reconnectionDelayInput.value) || 1000;
+            
+            // Save to localStorage
+            localStorage.setItem('socketIOMonitorConfig', JSON.stringify(config));
+            
+            addEventToList('system', 'Configuration updated', 'system');
+            
+            // If we're connected, show notification that we need to reconnect
+            if (socket && socket.connected) {
+                addEventToList('system', 'Reconnect to apply new configuration', 'system');
+            }
+        }
+
+        // Load configuration from localStorage
+        function loadConfigFromLocalStorage() {
+            const savedConfig = localStorage.getItem('socketIOMonitorConfig');
+            if (savedConfig) {
+                try {
+                    const parsedConfig = JSON.parse(savedConfig);
+                    config = { ...config, ...parsedConfig };
+                    
+                    // Update UI with loaded config
+                    serverUrlInput.value = config.url;
+                    reconnectionCheckbox.checked = config.reconnection;
+                    reconnectionAttemptsInput.value = config.reconnectionAttempts;
+                    reconnectionDelayInput.value = config.reconnectionDelay;
+                    
+                    // Find the right transport option
+                    const transportStr = JSON.stringify(config.transports);
+                    for (let i = 0; i < transportSelect.options.length; i++) {
+                        if (transportSelect.options[i].value === transportStr) {
+                            transportSelect.selectedIndex = i;
+                            break;
+                        }
+                    }
+                } catch (e) {
+                    console.error('Error loading config:', e);
+                }
+            }
+        }
+
+        // Emit custom event
+        function emitEvent() {
+            if (!socket || !socket.connected) {
+                addEventToList('system', 'Not connected to server', 'error');
+                return;
+            }
+
+            const eventName = eventNameInput.value.trim();
+            if (!eventName) {
+                addEventToList('system', 'Event name is required', 'error');
+                return;
+            }
+
+            let eventData;
+            try {
+                // If data field is empty, send undefined
+                if (eventDataInput.value.trim() === '') {
+                    eventData = undefined;
+                } else {
+                    // Try to parse as JSON
+                    eventData = JSON.parse(eventDataInput.value);
+                }
+                
+                socket.emit(eventName, eventData);
+                addEventToList('emit', { event: eventName, data: eventData }, 'system');
+            } catch (e) {
+                // If not valid JSON, send as string
+                eventData = eventDataInput.value;
+                socket.emit(eventName, eventData);
+                addEventToList('emit', { event: eventName, data: eventData }, 'system');
+            }
+        }
+
+        // Function to join a room
+        function joinRoom() {
+            if (!socket || !socket.connected) {
+                addEventToList('system', 'Not connected to server', 'error');
+                return;
+            }
+            
+            const roomName = joinRoomInput.value.trim();
+            if (!roomName) {
+                addEventToList('system', 'Room name is required', 'error');
+                return;
+            }
+            
+            // Try different join event patterns commonly used by Socket.IO servers
+            socket.emit('join', roomName);
+            socket.emit('join', { room: roomName });
+            socket.emit('joinRoom', roomName);
+            socket.emit('subscribe', roomName);
+            
+            // Also try joining via the socket.io internal method if available
+            if (typeof socket.join === 'function') {
+                try {
+                    socket.join(roomName);
+                } catch (e) {
+                    // This might not work in all Socket.IO client versions
+                    console.log('Direct socket.join not available in this client');
+                }
+            }
+            
+            addEventToList('system', `Attempted to join room: ${roomName} using multiple methods`, 'system');
+            joinRoomInput.value = '';
+        }
+        
+        // Event Listeners
+        connectBtn.addEventListener('click', connectToServer);
+        disconnectBtn.addEventListener('click', disconnectFromServer);
+        clearEventsBtn.addEventListener('click', clearEvents);
+        eventFilter.addEventListener('input', filterEvents);
+        saveConfigBtn.addEventListener('click', saveConfiguration);
+        emitEventBtn.addEventListener('click', emitEvent);
+        joinRoomBtn.addEventListener('click', joinRoom);
+
+        // Add initial system message
+        addEventToList('system', 'Socket.IO Event Monitor initialized', 'system');
+    </script>
+</body>
+</html>
