@@ -98,7 +98,9 @@ To make this a more userful service, I would:
 I would also try to speed up the indexing by doing both horizontal and vertical scaling:
 - Run more instances of this software to index different ranges of blocks.
 - Run on more powerful machines to be able to increase the concurrency of the Bull jobs. 
+- Ability to index from more networks, not just Arbitrum.
 - Connect to more providers - not just alchemy, to be able to get around rate limits. Could round-robin them.
+- Clean up code a bit, refactor some parts to be more modular. Separate out the bull workers into another file.
 
 I would also add an authentication layer to the bullboard interface.
 
